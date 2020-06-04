@@ -1,0 +1,171 @@
+#<AdxTL>@(#)0.0.0.0 $Revision$
+$ACTION
+Case ACTION
+  When "OUVRE"      : Gosub OUVRE
+  When "FILTRE"     : Gosub FILTRE
+  When "LIENS"      : Gosub LIENS
+  When "CREATION"   : Gosub CREATION
+  When "MODIF"      : Gosub MODIF
+  When "ANNULE"     : Gosub ANNULE
+  When "APRES_CRE"  : Gosub APRES_CRE
+  When "APRES_MOD"  : Gosub APRES_MOD
+  When "INICRE_LIG" : Gosub INICRE_LIG
+  When "DEFLIG"     : Gosub DEFLIG
+  Endcase
+Return
+
+##############################################################
+######################    ACCIONES    ########################
+##############################################################
+################################################################
+$OUVRE
+  Gosub DECLARE From TABLEAUX
+Return
+
+################################################################
+$FILTRE
+  Default File [YGC]
+Return
+
+################################################################
+$LIENS
+  Gosub LIENS From TABLEAUX
+  Gosub SET_WST
+Return
+
+################################################################
+$CREATION
+  Gosub CREATION From TABLEAUX
+Return
+
+################################################################
+$MODIF
+  Gosub MODIF From TABLEAUX
+Return
+
+################################################################
+$ANNULE
+  Gosub ANNULE From TABLEAUX
+Return
+
+################################################################
+$APRES_CRE
+  Gosub LIENS From TABLEAUX
+Return
+
+################################################################
+$APRES_MOD
+  Gosub LIENS From TABLEAUX
+Return
+
+################################################################
+$INICRE_LIG
+  [F:YGD]CDGGAMA = [M:YGA0]CDGGAMA
+Return
+
+################################################################
+$DEFLIG
+  Default Mask [YGA1]   # pantalla de las líneas
+  Default File [YGD]    # abreviatura de la tabla de las líneas
+
+  # criterios de filtrado
+  CRIT    = 'CDGGAMA="'+[M:YGA0]CDGGAMA+'"'    # campo común de las tablas + pantalla cabecera (con el campo común)
+  FICLIG  = "YGAMAD"                           # nombre de la tabla de detalle
+  ABLIG   = "YGD"                              # abreviatura de la tabla de detalle
+  ZONLIG  = "GAMALIN"                          # campo contador de línea en la tabla detalle
+Return
+
+##############################################################
+######################    ETIQUETAS    #######################
+##############################################################
+##############################################################
+$SET_WST
+Local Integer LCON : Raz LCON
+
+  If !clalev([F:MWS0]) Then : Local File WORKSTATIO [F:MWS0] : Endif
+  If !clalev([F:AXX0]) Then : Local File ATEXTRA    [F:AXX0] : Endif
+  Filter [F:MWS0] Where YGAMA = [M:YGA0]CDGGAMA
+  For [MWS0]
+    [M:YGA2]WST(LCON)       = [F:MWS0]WST
+    [M:YGA2]FCY(LCON)       = [F:MWS0]WCRFCY
+    Filter [F:AXX0] Where CODFIC = "WORKSTATIO" and ZONE = "WSTDESAXX" and LANGUE = GLANGUE and IDENT1 = [F:MWS0]WST
+    Read [F:AXX0] First
+    If !fstat Then
+      [M:YGA2]WSTDES(LCON)  = [F:AXX0]TEXTE
+    Endif
+    Filter [F:AXX0]
+    LCON += 1
+  Next
+  Filter [F:MWS0]
+  Close Local File [MWS0],[AXX0]
+
+  [M:YGA2]NBLIG = LCON
+  Affzo [M:YGA2]
+
+Kill LCON
+
+Return
+
+##############################################################
+#################    ACCIONES DE CAMPO    ####################
+##############################################################
+######################################################################################
+## Después de modificar el campo 'Unidad de control'
+######################################################################################
+Subprog AM_UDCRTL(VALEUR)
+Variable Integer VALEUR
+  [M:YGA1]UNIDADES(nolign-1) = 6
+  Affzo [M:YGA1]UNIDADES(nolign-1)
+End
+
+######################################################################################
+## Antes de entrada del campo 'Unidades'
+######################################################################################
+Subprog AS_UNIDADES(VALEUR)
+Variable Integer VALEUR
+  Raz GMENLOC
+  Case [M:YGA1]UDCRTL(nolign-1)
+    When 1 : GMENLOC(2)=1 : GMENLOC(3)=1 : GMENLOC(4)=1 : GMENLOC(5)=1 : GMENLOC(6)=1
+    When 2 : GMENLOC(1)=1 : GMENLOC(5)=1 : GMENLOC(6)=1
+    When 3 : GMENLOC(1)=1 : GMENLOC(2)=1 : GMENLOC(3)=1 : GMENLOC(4)=1 : GMENLOC(6)=1
+  Endcase
+End
+
+##############################################################
+##################    FUNCIONES PROPIAS    ###################
+##############################################################
+
+######################################################################################
+## Etiqueta añadida por el supervisor (pantalla YGAMAD) 28/05/2020 12:13:16 (AIT04)
+######################################################################################
+Subprog C_ROUALT(VALEUR)
+Variable Decimal VALEUR
+# Controlo que el registro no se haya introducido en líneas anteriores
+Call UNICITE(VALEUR,[M:YGA1]ROUALT(0..[M:YGA1]NBLIG-1)) From OBJDIV
+End
+
+
+######################################################################################
+
+######################################################################################
+## Etiqueta añadida por el supervisor (pantalla YGAMAD) 28/05/2020 15:19:43 (AIT04)
+######################################################################################
+Subprog AM_ROUALT(VALEUR)
+Variable Decimal VALEUR
+# Traigo la descripción de la ruta
+#If !clalev([PP5]) : Local File ATEXTRA [PP5] : Endif
+#
+#Filter [PP5] Where [PP5]CODFIC = "ROUTING" and [PP5]ZONE = "ROUDESAXX" and [PP5]LANGUE = "SPA" and mid$([PP5]IDENT1,1,8)=[M:YGA1]ROUNUM(nolign-1) and mid$([PP5]IDENT1,10,2) = num$(VALEUR)
+#Read [PP5] First
+#If fstat = 0
+#  [M:YGA1]ROUDES(nolign-1) = [PP5]TEXTE
+#  Affzo [M:YGA1]ROUDES(nolign-1)
+#Endif
+#Filter [PP5]
+#
+#Close Local File [PP5]
+End
+
+
+######################################################################################
+

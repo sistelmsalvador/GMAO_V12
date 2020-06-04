@@ -1,0 +1,376 @@
+#<AdxTL>@(#)0.0.0.0 $Revision$
+Call IMPORTATION("MFG") From GIMPOBJ
+End
+# YAPMP: Verifico si es una OF de mantenimiento
+
+###################################################################################
+$ACTION
+Case ACTION
+    When "EXPORT" :        Gosub EXPORT
+Endcase
+Return
+
+###################################################################################
+$EXPORT
+If clalev ([F:MFG]) = 0 : Local File MFGHEAD  [MFG] : Endif
+Read [F:MFG]MFG0    = [F:MFI]MFGNUM
+If !fstat : GIMP(1) = [F:MFG]ROUNUM
+            GIMP(2) = num$([F:MFG]ROUALT)
+            GIMP(4) = num$([F:MFG]MFGSTA)
+Endif
+#Pour mes tests
+#GIMP(3) = "C"
+Return
+
+########################################################
+# Ouvertures
+########################################################
+# GIMP :                                               #
+#     GIMP(1) : Gamme                                  #
+#     GIMP(2) : Alternative                            #
+#     GIMP(3) : Code mise à jour                       #
+#     GIMP(4) : statut de l'ordre                      #
+########################################################
+$OUVRE
+Local   Char    WMESSAGE(250)
+Global  Integer G_ROUNUMOK, G_ROUALTOK, G_CODMAJOK, G_MFGSTAOK
+Global  Date    G_DATE
+#
+#Pour savoir si la gamme l'alternative de gamme etc ... sont paramétrés
+Call TST_CHAMP("MFI","*1",G_ROUNUMOK) From SUBIMPOBJ    : # Gamme
+Call TST_CHAMP("MFI","*2",G_ROUALTOK) From SUBIMPOBJ    : # Alternative de gamme
+Call TST_CHAMP("MFI","*3",G_CODMAJOK) From SUBIMPOBJ    : # Code mise à jour
+Call TST_CHAMP("MFI","*4",G_MFGSTAOK) From SUBIMPOBJ    : # Code statut de l'ordre
+#
+If clalev([M:OPSK])=0 : Local Mask OPSK      [OPSK] : Endif       # masque encours charge
+If clalev([M:MFGK])=0 : Local Mask MFGK      [MFGK] : Endif       # masque buffer création of
+If clalev([F:FCY])<=0 : Local File FACILITY   [FCY] : Endif
+If clalev([F:ITM])<=0 : Local File ITMMASTER  [ITM] : Endif
+If clalev([F:ITF])<=0 : Local File ITMFACILIT [ITF] : Endif
+If clalev([F:MFG])<=0 : Local File MFGHEAD    [MFG] : Endif
+If clalev([F:MFI])<=0 : Local File MFGITM     [MFI] : Endif
+If clalev([F:MFM])<=0 : Local File MFGMAT     [MFM] : Endif
+If clalev([F:MFO])<=0 : Local File MFGOPE     [MFO] : Endif
+If clalev([F:MWS])<=0 : Local File WORKSTATIO [MWS] : Endif
+If clalev([F:ROH])<=0 : Local File ROUTING    [ROH] : Endif
+If clalev([F:ROS])<=0 : Local File ROUSCD     [ROS] : Endif
+If clalev([F:ROO])<=0 : Local File ROUOPE     [ROO] : Endif
+If clalev([F:ROT])<=0 : Local File ROUOPESTD  [ROT] : Endif
+If clalev([F:SCH])<=0 : Local File SCHEDULING [SCH] : Endif
+If clalev([F:TRO])<=0 : Local File TABROUALT  [TRO] : Endif
+If clalev([F:TCA])<=0 : Local File TABCOUAFF  [TCA] : Endif
+If clalev([F:TUN])<=0 : Local File TABUNIT    [TUN] : Endif
+If clalev([F:MTS])<=0 : Local File MFGTRS     [MTS] : Endif
+If clalev([F:ADP])<=0 : Local File ADOPAR     [ADP] : Endif
+If clalev([F:ADW])<=0 : Local File ADOVAL     [ADW] : Endif
+If clalev([F:TBO])<=0 : Local File TABBOMALT  [TBO] : Endif
+If clalev([F:BOH])<=0 : Local File BOM        [BOH] : Endif
+If clalev([F:BOD])<=0 : Local File BOMD       [BOD] : Endif
+If clalev([F:CAL])<=0 : Local File CPTANALIN  [CAL] : Endif
+
+Call FIND_GFCYDEF(8) From TRTX3   # FQ 54218
+Gosub CHARG_PARAM
+
+Return
+
+###############################################
+$CHARG_PARAM
+Local Char    MFGPARAM(10)
+# Transaction automatique
+Global Char    GMFGMTSNUM(GLONTRS)
+Call PARAM(GFCY,"MFGMTSNUM",MFGPARAM) From ADOVAL
+GMFGMTSNUM = MFGPARAM
+Read [F:MTS]MTS0 = 1;GMFGMTSNUM
+If fstat : OK = 0 : Return : Endif
+#----- Variables société
+Call GETDEV(GFCY) From DEVSUB : If GFINRSP="" GFINRSP=GFCY : Endif
+Return
+
+######################################################
+# Réinitialisation après création (début de lecture)
+$RAZCRE
+Raz [M:MFGK]
+Return
+
+######################################################
+$SAIMSK
+Return
+
+######################################################
+# Contrôles et mises à jour
+$VALID
+WDEBENR = adxseek("IMP")
+If IMPFIN : OK = 0 : Return : Endif
+#
+
+# Re-read MFGMTSNUM parameter and corresponding entry transaction for each work order production site..
+If [F:MFI]MFGFCY<>GFCY
+    GFCY=[F:MFI]MFGFCY
+    Gosub CHARG_PARAM
+Endif
+
+[M:MFGK]        = [F:MFI]
+[M:MFGK]PIO     = [F:MFI]MFGPIO                            # llc 02.03
+[M:MFGK]CODTRS  = 1
+[M:MFGK]MAJPEC  = 9
+
+# Issue 120281 - 2017-01-05 by STLIG : Work order scheduling mode set according to the work order transaction..                           ..
+If ([F:MTS]SCDMODSAI<>3)
+  [M:MFGK]SCDMOD=[F:MTS]SCDMODSAI
+Else
+  [M:MFGK]SCDMOD=0
+Endif
+
+If G_ROUNUMOK : [M:MFGK]ROUNUM = GIMP(1)      : Endif
+If G_ROUALTOK : [M:MFGK]ROUALT = val(GIMP(2)) : Endif
+If G_CODMAJOK : [M:MFGK]CODMAJ = GIMP(3)      : Endif
+If G_MFGSTAOK : [M:MFGK]MFGSTA = val(GIMP(4)) : Endif
+Gosub CONTROLE_IMP
+If !OK
+    Call ECR_TRACE(WMESSAGE,1) From GESECRAN
+    GOK = 0
+    Return
+Endif
+Call MAJ_OF From MFGAUTLIB
+Call VERIF_GMAO([M:MFGK]MFGNUM) From SPEMFG  # YAPMP
+If [M:MFGK]CODRET = 0
+   Case [M:MFGK]MFGSTA
+       When 1:
+             Case [M:MFGK]CODMAJ
+                  When "C" :
+                         WMESSAGE = mess(231,197,1)-[M:MFGK]MFGNUM-mess(233,197,1)
+                  When "M" :
+                         WMESSAGE = mess(231,197,1)-[M:MFGK]MFGNUM-mess(232,197,1)
+                  When "A" :
+                         WMESSAGE = mess(231,197,1)-[M:MFGK]MFGNUM-mess(234,197,1)
+             Endcase
+
+       When 2:
+             Case [M:MFGK]CODMAJ
+                  When "C" :
+                         WMESSAGE = mess(230,197,1)-[M:MFGK]MFGNUM-mess(233,197,1)
+                  When "M" :
+                         WMESSAGE = mess(230,197,1)-[M:MFGK]MFGNUM-mess(232,197,1)
+                  When "A" :
+                         WMESSAGE = mess(230,197,1)-[M:MFGK]MFGNUM-mess(234,197,1)
+             Endcase
+   Endcase
+   Call ECR_TRACE(WMESSAGE,0) From GESECRAN
+Endif
+Return
+
+######################################################
+# Contrôles
+$CONTROLE_IMP
+Local     Char     WFCY(GLONFCY)
+Local     Integer  WALT
+Local     Date     WDAT
+Local     Char     WITM(GLONITM)    # mm 05.08
+Local     Integer  TABTBO(3)
+# sr 09.02 Verifier que le code de mise à jour est correct demande 15636
+If !find([M:MFGK]CODMAJ,"A","C","M")
+         WMESSAGE = mess(205,193,1) - [F:MFG]MFGNUM
+         OK = 0
+         Return
+Endif
+
+#Contrôle site
+If [M:MFGK]MFGFCY = "" : [M:MFGK]MFGFCY = GFCY : Endif
+# FQ 53980 GA 11/2009 # Contrôle OF
+Call GETCPY([M:MFGK]MFGFCY,"MTS",1,GMFGMTSNUM) From TRTX3CPT    # alimentation de GSOCIETE et GTYPGEN
+
+Case [M:MFGK]CODMAJ
+     When "C" : [M:MFGK]RMFGNUM = [M:MFGK]MFGNUM : # GH 31/08/12 bug 84023
+                Raz [M:MFGK]MFGNUM,MFGLIN
+                If !find([M:MFGK]PIO,1,2,3) : [M:MFGK]PIO = 1 : Endif
+                If !find([M:MFGK]FMI,1,5)   : [M:MFGK]FMI = 1 : Endif
+                [M:MFGK]BPRNUM = [F:MFI]BPCNUM
+                #Contrôle site
+                #If [M:MFGK]MFGFCY = "" : [M:MFGK]MFGFCY = GFCY : Endif
+                If [M:MFGK]MFGFCY<>[F:FCY]FCY
+                  Read [F:FCY]FCY0 = [M:MFGK]MFGFCY
+                  If fstat : WMESSAGE = mess(23,100,1) : OK = 0 : Return : Endif
+                Endif
+                If [F:FCY]MFGFLG <> 2
+                    WMESSAGE = mess(1,193,1) + [M:MFGK]MFGFCY
+                    OK = 0
+                    Return
+                Endif
+                If [M:MFGK]STRDAT = [0/0/0]
+                    WMESSAGE = mess(170,193,1) - [M:MFGK]STRDAT
+                    OK = 0
+                    Return
+                Endif
+                If [M:MFGK]ENDDAT = [0/0/0] | [M:MFGK]ENDDAT < [M:MFGK]STRDAT
+                    WMESSAGE = mess(171,193,1) - [M:MFGK]ENDDAT
+                    OK = 0
+                    Return
+                Endif
+#
+     When "M" : If [M:MFGK]MFGLIN = 0 : [M:MFGK]MFGLIN = 1000 : Endif
+                Read [F:MFI]MFI0 = [M:MFGK]MFGNUM;[M:MFGK]MFGLIN
+                If fstat : WMESSAGE = mess(151,193,1) - [M:MFGK]MFGNUM +"/"+ num$([M:MFGK]MFGLIN)
+                   OK = 0
+                   Return
+                Endif
+                Read [F:MFG]MFG0 = [M:MFGK]MFGNUM
+                If fstat : WMESSAGE = mess(151,193,1) - [M:MFGK]MFGNUM
+                   OK = 0
+                   Return
+                Endif
+                #Zone à zone regarder si la zone est renseignée dans le masque ou si on doit
+                #récupérer celle du fichier
+                [M:MFGK]MFGFCY    = [F:MFI]MFGFCY
+                [M:MFGK]ITMREF    = [F:MFI]ITMREF
+                If !find([F:MFG]MFGSTA,1,2)                # 73220
+                  [M:MFGK]MFGSTA  = [F:MFG]MFGSTA
+                Endif
+                If [M:MFGK]EXTQTY = 0 : [M:MFGK]EXTQTY = [F:MFI]EXTQTY : Endif # FQ 47742 avant [M:MFI]EXTQTY
+                [M:MFGK]PRVQTY    = [F:MFI]EXTQTY
+                #Contrôle quantité prévue
+                #Si la nouvelle qté prévue est inférieure à l'ancienne elle ne doit pas être
+                #inférieure à la qté réalisée
+                If [M:MFGK]EXTQTY < [M:MFGK]PRVQTY & [M:MFGK]EXTQTY < [F:MFI]CPLQTY
+                   WMESSAGE = mess(168,193,1) - num$([M:MFGK]EXTQTY)
+                   OK = 0
+                   Return
+                Endif
+                # si le suivi a commencé on ne peut pas modifier la date de début
+                If [M:MFGK]STRDAT = [0/0/0] : [M:MFGK]STRDAT = [F:MFI]STRDAT
+                Elsif [M:MFGK]STRDAT <> [F:MFI]STRDAT & [F:MFI]MFITRKFLG > 3
+                      WMESSAGE = mess(80,193,1)
+                      OK = 0
+                      Return
+                Endif
+                If [M:MFGK]ENDDAT = [0/0/0] : [M:MFGK]ENDDAT = [F:MFI]ENDDAT : Endif
+                If [M:MFGK]BOMALT = 0       : [M:MFGK]BOMALT = [F:MFI]BOMALT : Endif
+                If [M:MFGK]ROUNUM = ""      : [M:MFGK]ROUNUM = [F:MFG]ROUNUM : Endif
+                If [M:MFGK]ROUALT = 0       : [M:MFGK]ROUALT = [F:MFG]ROUALT : Endif
+                If [M:MFGK]PJT    = ""      : [M:MFGK]PJT    = [F:MFI]PJT    : Endif
+                If [M:MFGK]LOT    = ""      : [M:MFGK]LOT    = [F:MFI]LOT    : Endif
+                If !find([M:MFGK]PIO,1,2,3) : [M:MFGK]PIO    = [F:MFG]MFGPIO : Endif
+                If [M:MFGK]BPRNUM = ""      : [M:MFGK]BPRNUM = [F:MFI]BPCNUM : Endif
+                [M:MFGK]VCRTYPORI = [F:MFI]VCRTYPORI
+                [M:MFGK]VCRNUMORI = [F:MFI]VCRNUMORI
+                [M:MFGK]VCRLINORI = [F:MFI]VCRLINORI
+                [M:MFGK]WIPTYP    = 5
+                [M:MFGK]WIPNUM    = [F:MFI]WIPNUM
+                [M:MFGK]SCDFLG    = [F:MFG]SCDFLG
+                [M:MFGK]FMI       = [F:MFI]FMI
+#
+    When "A" : Read [F:MFG]MFG0 = [M:MFGK]MFGNUM
+               If fstat : WMESSAGE = mess(151,193,1) - [M:MFGK]MFGNUM
+                   OK = 0
+                   Return
+               Endif
+             # pas de suppression si en-cours ou plus
+               If [F:MFG]MFGTRKFLG > 3
+                   WMESSAGE = mess(169,193,1) - [F:MFG]MFGNUM
+                   OK = 0
+                   Return
+               Endif
+               [M:MFGK]MFGSTA = [F:MFG]MFGSTA
+#
+Endcase
+#
+If [M:MFGK]CODMAJ = "A" : Return : Endif
+#
+#Contrôles communs à la création et à la modification
+#
+#Contrôle statut de l'ordre
+If !find([M:MFGK]MFGSTA,1,2)
+    WMESSAGE = mess(167,193,1) - num$([M:MFGK]MFGSTA)
+    OK = 0
+    Return
+Endif
+#Contrôle quantité prévue
+If [M:MFGK]EXTQTY <= 0
+   WMESSAGE = mess(168,193,1) - num$([M:MFGK]EXTQTY)
+   OK = 0
+   Return
+Endif
+#Contrôle article
+Read [F:ITM]ITM0 = [M:MFGK]ITMREF
+If fstat : WMESSAGE = mess(23,100,1) + [M:MFGK]ITMREF
+   OK = 0
+   Return
+Endif
+#Contrôle article site
+Read [ITF]ITF0=[M:MFGK]ITMREF;[M:MFGK]MFGFCY
+If fstat
+   WMESSAGE = mess(45,193,1) + [M:MFGK]ITMREF + "/" + [M:MFGK]MFGFCY
+   OK = 0
+   Return
+Endif
+#
+#contrôle catégorie article etc ...
+WFCY = [M:MFGK]MFGFCY
+Raz GMESSAGE
+Call CONTMFGITM(WFCY, 1) From MFGLIB
+If GMESSAGE <> ""
+   WMESSAGE = GMESSAGE + [M:MFGK]ITMREF + "/" + [M:MFGK]MFGFCY
+   OK = 0
+   Return
+Endif
+#
+WITM=[M:MFGK]ITMREF
+If [M:MFGK]STRDAT=[0/0/0]
+   WDAT=date$
+Else
+   WDAT=[M:MFGK]STRDAT
+Endif
+WFCY=[M:MFGK]MFGFCY
+#    Lecture nomenclature
+Read [TBO]TBO0=2;[M:MFGK]BOMALT
+If fstat : WMESSAGE = mess(23,100,1) + num$([M:MFGK]BOMALT) + num$(2) : OK = 0 : Return : Endif
+Read [BOH]BOH0=WITM;[M:MFGK]BOMALT;2
+If fstat
+   WMESSAGE = mess(95,193,1)
+   OK = 0
+   Return
+Endif
+Raz GMESSAGE
+#contrôle nomenclature
+Call CONTMFGNOM(WFCY,WALT,WDAT,1) From MFGLIB
+If WALT=0 | GMESSAGE <> ""
+   WMESSAGE = GMESSAGE + [M:MFGK]ITMREF + "/" + num$([M:MFGK]BOMALT)
+   OK = 0
+   Return
+Endif
+#contrôle gamme
+If ([F:MTS]MFGMODC = 2 | [F:MTS]MFGMODO = 2) & [M:MFGK]ROUNUM = ""
+   WMESSAGE = mess(31,190,1) + [M:MFGK]ROUNUM
+   OK = 0
+   Return
+Endif
+WDAT=[M:MFGK]STRDAT
+WFCY=[M:MFGK]MFGFCY
+#    Lecture ROUTING
+Read [TRO]TRO0=[M:MFGK]ROUALT
+If fstat : WMESSAGE = mess(23,100,1) + num$([M:MFGK]ROUALT)
+           OK = 0
+           Return
+Endif
+Read [ROH]ROH1=[M:MFGK]MFGFCY;[M:MFGK]ROUNUM;[M:MFGK]ROUALT
+If fstat : WMESSAGE = mess(23,100,1) + [M:MFGK]ROUNUM + "/" +num$([M:MFGK]ROUALT)
+           OK = 0
+           Return
+Endif
+#
+Raz GMESSAGE
+Call CONTMFGGAM(WFCY,WALT,WDAT,[M:MFGK]EXTQTY, [F:ITM]STU, 1) From MFGLIB
+If WALT=0 | GMESSAGE <> ""
+            WMESSAGE = GMESSAGE + [M:MFGK]ROUNUM + "/" + num$([M:MFGK]ROUALT)
+            OK = 0
+            Return
+Endif
+# Contrôle de cohérence des alternatives de nomenclature
+TABTBO(0)=[F:TRO]BOMALT1
+TABTBO(1)=[F:TRO]BOMALT2
+TABTBO(2)=[F:TRO]BOMALT3
+If !find([M:MFGK]BOMALT, TABTBO)
+         WMESSAGE=mess(53,193,1) + num$([M:MFGK]ROUALT) + "/" + num$([M:MFGK]BOMALT)
+         OK = 0
+         Return
+Endif
+Return

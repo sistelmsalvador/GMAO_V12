@@ -1,0 +1,54 @@
+#<AdxTL>@(#)0.0.0.0 $Revision$
+# Gestión de la máscara MTK0 (Especifico)
+
+######################################################################################
+## Etiqueta añadida por el supervisor (pantalla MTK0) 13/01/2020 10:27:54 (AIT04)
+######################################################################################
+$ACTION
+Case ACTION
+ When Default
+Endcase
+Return
+
+Subprog C_MFGNUM(VALEUR)
+Variable Char    VALEUR()
+# Controlo selección OF en función de la transacción
+Read [MFG]MFG0 = VALEUR
+If fstat = 0
+  If GFLAG = "PO1" or GFLAG = "PO2"
+    If [MFG]YMNTOTYP > 2
+      Errbox "La OF seleccionada es de tipo 'Mantenimiento'. Seleccione la transacción PO3 - GMAO"
+      mkstat = 2
+    Endif
+  Elsif GFLAG = "PO3"
+    If [MFG]YMNTOTYP < 3
+      Errbox "La OF seleccionada es no de tipo 'Mantenimiento'. Seleccione la transacción PO1 o PO2"
+      mkstat = 2
+    Endif
+  Endif
+Endif
+
+# Controlo si no tengo lote. en este caso, paro
+# 06/04/2020. Descarto las OFs de Mantenimiento
+Read [MFG]MFG0 = VALEUR
+If fstat = 0 and [MFG]YMNTOTYP < 3
+  Local Integer HAY_LOTE
+  Filter [MFI] Where [MFI]MFGNUM = VALEUR
+  Read [MFI] First
+  If fstat = 0
+    If [MFI]LOT <> ""
+      HAY_LOTE = 2
+    Endif
+  Endif
+  Filter [MFI]
+
+  If HAY_LOTE <> 2
+    Errbox "La OF no tiene lote. Vaya a la OF, pase la OF a planificado y registre, pase la OF a Firme y registre y compruebe que se ha asignado un lote"
+    mkstat = 2
+  Endif
+Endif
+End
+
+
+######################################################################################
+

@@ -1,0 +1,458 @@
+#<AdxTL>@(#)0.0.0.0 $Revision$
+#####################################################################################
+# Src: SPEYNM
+#-------------------------------------------------------------------------------------
+# Proyecto: Estándar
+#-------------------------------------------------------------------------------------
+# Version: v12
+#-------------------------------------------------------------------------------------
+# YAPMP - Creación OF's Mantenimiento preventivo
+# Fecha inicio YAPMP: 29/05/2019
+# Desarrollador: JCH
+# Código de desarrollo: YAPMP
+# Descripción del desarrollo: Lanzamiento preventivo de órdenes de fabricación
+# Fecha: 29/05/2019
+# Codigo Actividad: YAPMP
+#######################################################################################
+
+
+$ACTION
+
+#If GUSER="AIT07" Then : Infbox ACTION : Endif
+Case ACTION
+  When "OUVRE"        : Gosub OUVRE
+  When "SEL_TABLE"    : Gosub SEL_TABLE
+  When "VERF_TABLE"   : Gosub VERF_TABLE
+  When "OK"           : Gosub OK
+  When "FIN"          : Gosub FIN
+  When Default
+Endcase
+
+Return
+
+##############################################################
+######################    ACCIONES    ########################
+##############################################################
+########################################################################
+$OUVRE
+  Gosub ABRIR_TABLAS
+Return
+
+########################################################################
+$FIN
+  Gosub CERRAR_TABLAS
+Return
+
+########################################################################
+$SEL_TABLE
+  Case TABLE
+    When "YFCYPROD"     : Gosub SEL_YFCYPROD                                # selección para la planta (sólo las de producción)
+    When "YSELCTINI"    : Gosub SEL_YSELCTINI                               # selección para el centro de trabajo inicial
+    When "YSELCTFIN"    : Gosub SEL_YSELCTFIN                               # selección para el centro de trabajo final
+  Endcase
+Return
+
+########################################################################
+# esta etiqueta se utiliza para realizar acciones específicas cuando se selecciona una de las opciones en la ventana de selección
+$VERF_TABLE
+  Case TABLE
+    When "YFCYPROD"     : Gosub VERF_YFCYPROD
+    When "YSELCTINI"    : Gosub VERF_YSELCTINI
+    When "YSELCTFIN"    : Gosub VERF_YSELCTFIN
+  Endcase
+Return
+
+########################################################################
+$SEL_YFCYPROD
+# YAPMP
+  If !clalev([F:FCY0]) Then : Local File FACILITY [F:FCY0] : Endif
+  Default File [FCY0]
+  Filter [F:FCY0] Where MFGFLG = 2                                          # filtra sólo las de producción
+
+  NBCOL       = 0                                                           # número de la columna
+  TIT(NBCOL)  = "Selección Plantas"                                         # título de la ventana
+  NBCOL       += 1
+  TIT(NBCOL)  = "Planta"                                                    # título de la segunda columna
+  COL(NBCOL)  = "FCY"                                                       # nombre del campo a mostrar en la segunda columna
+  NBCOL       += 1
+  TIT(NBCOL)  = "Nombre"                                                    # título de la tercera columna
+  COL(NBCOL)  = "FCYNAM"                                                    # nombre del campo a mostrar en la tercera columna
+  NBCOL       += 1
+  TIT(NBCOL)  = "Desc. corta"                                               # título de la tercera columna
+  COL(NBCOL)  = "FCYSHO"                                                    # nombre del campo a mostrar en la tercera columna
+# YAPMP
+Return
+
+########################################################################
+$VERF_YFCYPROD
+Return
+
+########################################################################
+$SEL_YSELCTINI
+# YAPMP
+  Link [AXX0] With [MWS0]WST0=[F:AXX0]IDENT1;IDENT2 As [LNK0] Where ZONE = "WSTDESAXX"
+  Columns [LNK0] ([MWS0]WST,[AXX0]TEXTE)                                    # muestro sólo aquellos campos que me hacen falta
+  Default File [LNK0]
+
+  NBCOL       = 0                                                           # número de la columna
+  TIT(NBCOL)  = "Centro de trabajo"                                         # título de la ventana
+  NBCOL       += 1
+  TIT(NBCOL)  = "Centro de trabajo"                                         # título de la segunda columna
+  COL(NBCOL)  = "[MWS0]WST"                                                 # nombre del campo a mostrar en la segunda columna
+  NBCOL       += 1
+  TIT(NBCOL)  = "Nombre"                                                    # título de la tercera columna
+  COL(NBCOL)  = "[AXX0]TEXTE"                                               # nombre del campo a mostrar en la tercera columna
+# YAPMP
+Return
+
+########################################################################
+$VERF_YSELCTINI
+# YAPMP
+  [M:YNM0]YWSTINIDESC = [F:AXX0]TEXTE
+  [M:YNM0]YWSTINI     = [F:MWS0]WST
+  Affzo [M:YNM0]YWSTINI,YWSTINIDESC
+# YAPMP
+Return
+
+########################################################################
+$SEL_YSELCTFIN
+# YAPMP
+  Link [AXX1] With [MWS1]WST0=[F:AXX1]IDENT1;IDENT2 As [LNK1] Where ZONE = "WSTDESAXX"
+  Columns [LNK1] ([MWS1]WST,[AXX1]TEXTE)                                    # muestro sólo aquellos campos que me hacen falta
+  Default File [LNK1]
+
+  NBCOL       = 0                                                           # número de la columna
+  TIT(NBCOL)  = "Centro de trabajo"                                         # título de la ventana
+  NBCOL       += 1
+  TIT(NBCOL)  = "Centro de trabajo"                                         # título de la segunda columna
+  COL(NBCOL)  = "[MWS1]WST"                                                 # nombre del campo a mostrar en la segunda columna
+  NBCOL       += 1
+  TIT(NBCOL)  = "Nombre"                                                    # título de la tercera columna
+  COL(NBCOL)  = "[AXX1]TEXTE"                                               # nombre del campo a mostrar en la tercera columna
+# YAPMP
+Return
+
+########################################################################
+$VERF_YSELCTFIN
+# YAPMP
+  [M:YNM0]YWSTFINDESC = [F:AXX1]TEXTE
+  [M:YNM0]YWSTFIN     = [F:MWS1]WST
+  Affzo [M:YNM0]YWSTINI,YWSTINIDESC
+# YAPMP
+Return
+
+########################################################################
+$OK
+# YAPMP
+  Gosub VERIFICA_CAMPOS
+  If LERROR = "Y" Then
+    Call ERRTIT("Los filtros indicados no son correctos","Error en filtros") From GESECRAN
+    FIN = 1
+  Else
+    Gosub LANZA_ORDEN
+  Endif
+# YAPMP
+Return
+
+##############################################################
+######################    ETIQUETAS    #######################
+##############################################################
+########################################################
+$ABRIR_TABLAS
+# YAPMP
+  If !clalev([F:MFO0]) Then : Local File MFGOPE     [F:MFO0] : Endif
+  If !clalev([F:MFH0]) Then : Local File MFGHEAD    [F:MFH0] : Endif
+  If !clalev([F:YMP0]) Then : Local File YMNTOCT    [F:YMP0] : Endif
+  If !clalev([F:YMP1]) Then : Local File YMNTOCT    [F:YMP1] : Endif
+  If !clalev([F:MKO0]) Then : Local File MFGOPETRK  [F:MKO0] : Endif
+  If !clalev([F:MWS0]) Then : Local File WORKSTATIO [F:MWS0] : Endif
+  If !clalev([F:AXX0]) Then : Local File ATEXTRA    [F:AXX0] : Endif
+  If !clalev([F:MWS1]) Then : Local File WORKSTATIO [F:MWS1] : Endif
+  If !clalev([F:AXX1]) Then : Local File ATEXTRA    [F:AXX1] : Endif
+  If !clalev([F:MWS2]) Then : Local File WORKSTATIO [F:MWS2] : Endif
+  If !clalev([F:MWS3]) Then : Local File WORKSTATIO [F:MWS3] : Endif
+  If !clalev([F:YGD0]) Then : Local File YGAMAD     [F:YGD0] : Endif
+  If !clalev([F:YGD1]) Then : Local File YGAMAD     [F:YGD1] : Endif
+# YAPMP
+Return
+
+########################################################
+$CERRAR_TABLAS
+# YAPMP
+  If clalev([F:YMP0])  Then : Close Local File      [F:YMP0] : Endif
+  If clalev([F:YMP1])  Then : Close Local File      [F:YMP1] : Endif
+  If clalev([F:MFO0])  Then : Close Local File      [F:MFO0] : Endif
+  If clalev([F:MFH0])  Then : Close Local File      [F:MFH0] : Endif
+  If clalev([F:MKO0])  Then : Close Local File      [F:MKO0] : Endif
+  If clalev([F:MWS2])  Then : Close Local File      [F:MWS2] : Endif
+  If clalev([F:MWS3])  Then : Close Local File      [F:MWS3] : Endif
+  If clalev([F:YGD0])  Then : Close Local File      [F:YGD0] : Endif
+# YAPMP
+Return
+
+########################################################
+$VERIFICA_CAMPOS
+Local Char LERROR(1) : LERROR = "N"
+# YAPMP
+  If [M:YNM0]WCRFCY = "" Then                                                                         # control de planta
+    LERROR = "Y"
+  Endif
+  If [M:YNM0]YGAMAINI <> "" and [M:YNM0]YGAMAFIN <> "" Then                                           # control de gama
+    If [M:YNM0]YGAMAFIN < [M:YNM0]YGAMAINI Then
+      LERROR = "Y"
+    Endif
+  Endif
+  If [M:YNM0]YWSTINI <> "" and [M:YNM0]YWSTFIN <> "" Then                                             # control de CT
+    If [M:YNM0]YWSTFIN < [M:YNM0]YWSTINI Then
+      LERROR = "Y"
+    Endif
+  Endif
+
+# YAPMP
+Return
+
+########################################################
+$LANZA_ORDEN
+# YAPMP
+  Gosub DEFVARS
+  Gosub EJECUTA_PROCESO
+# YAPMP
+Return
+
+########################################################
+$DEFVARS
+# YAPMP
+  Local Char LCRIT(250) : Raz LCRIT
+  Local Double DIFERENCIA, SUMAHORAS, SUMAUNIDADES  : Raz DIFERENCIA, SUMAHORAS, SUMAUNIDADES
+  Local Char LFECHA(10), LHORA(10) : Raz LFECHA, LHORA
+  Local Char LDIRIMPORT(250) : LDIRIMPORT = filpath("IMPORT_EXPORT","","")
+  Local Char LFILE_W(200) : LFILE_W = "\OF"
+# YAPMP
+Return
+
+########################################################
+# YAPMP
+$EJECUTA_PROCESO
+Local Char    CT_PROD(50)
+Local Decimal MTK_CTD, MTK_TPO
+Local Decimal MFG_CTD, MFG_TPO
+Local Decimal TOT_CTD, TOT_TPO
+Local Date    LASTDATE
+Local Integer GUC
+Local Decimal GCTD
+Local Integer GUN
+Local Char    GBOM
+Local Integer GBOMALT
+Local Char    GROU
+
+  # genera el fichero en la ruta correspondiente
+  Gosub GEN_FILE_W
+
+  # abre el fichero para escritura
+  Gosub OPEN_FILE_W
+
+  # busca en la tabla temporal aquellos CT con los filtros de pantalla
+  LCRIT = "WSTTYP = 1"                                                                           # tienen mantenimiento y son de tipo máquina
+  If [M:YNM0]WCRFCY   <> "" Then : LCRIT += " and (WCRFCY = [M:YNM0]WCRFCY)"    : Endif          # planta
+  If [M:YNM0]YGAMAINI <> "" Then : LCRIT += " and (YGAMA >= [M:YNM0]YGAMAINI)"  : Endif          # sección fin
+  If [M:YNM0]YGAMAFIN <> "" Then : LCRIT += " and (YGAMA <= [M:YNM0]YGAMAFIN)"  : Endif          # sección fin
+  If [M:YNM0]YWSTINI  <> "" Then : LCRIT += " and (WST >= [M:YNM0]YWSTINI)"     : Endif          # CT inicial
+  If [M:YNM0]YWSTFIN  <> "" Then : LCRIT += " and (WST <= [M:YNM0]YWSTFIN)"     : Endif          # CT final
+
+  Filter [F:MWS3] Where evalue(LCRIT)                                                            # filtra los CT que cumplan los límites
+  For [MWS3]
+#      Infbox "el CT GMAO es: " + [F:MWS3]WST
+    Raz CT_PROD
+    Raz LASTDATE
+    Raz GUC
+    Raz GCTD
+    Raz GUN
+    Raz GBOM
+    Raz GBOMALT
+    Raz GROU
+    Raz MTK_CTD
+    Raz MTK_TPO
+    Raz MFG_CTD
+    Raz MFG_TPO
+    Raz TOT_CTD
+    Raz TOT_TPO
+
+    # devuelvo parámetros de la gama
+    Call GET_GAMA([F:MWS3]YGAMA,[M:YNM0]YROUALT,LASTDATE,GUC,GCTD,GUN,GBOMALT) From SPEYLIB0
+    GBOM = [F:MWS3]WST  # La estructura es el propio centro de trabajo
+    GROU = [F:MWS3]WST  # La ruta es el propio centro de trabajo
+#    Infbox "la fecha del última OF preventivo es: " + LASTDATE
+
+    # sino tengo parametría en la gama, finalizo bucle
+    If GROU = "" or GUC = 0
+      Goto NEXT_CT
+    Endif
+
+    # obtengo el CT de producción para luego calcular tiempos/cantidades de uso
+    Call GET_WSTSINMNTO([F:MWS3]YCTPREACTOR,[F:MWS3]WCRFCY,CT_PROD) From SPEYLIB0
+#    Infbox "el CT de producción es: " + CT_PROD
+
+    # en el caso que la unidad de control NO sea por tiempo natural, devuelve cantidad y tiempo en horas realizados (seguimientos) y las previstas (OFs)
+    If GUC <> 2
+      Call GET_SUM_MTK(CT_PROD,[F:MWS3]WCRFCY,LASTDATE,MTK_CTD,MTK_TPO) From SPEYLIB0
+      Call GET_SUM_MFG(CT_PROD,[F:MWS3]WCRFCY,LASTDATE,MFG_CTD,MFG_TPO) From SPEYLIB0
+      TOT_CTD = MTK_CTD + MFG_CTD
+      TOT_TPO = MTK_TPO + MFG_TPO
+#      Infbox "total cantidad: " + num$(TOT_CTD)
+#      Infbox "total tiempo: "   + num$(TOT_TPO)
+    Endif
+
+    # comparo valores gama <> seguimientos /OFs en función de la unidad de control de la gama
+    Case GUC
+      When 1  # horas de uso
+        If TOT_TPO >= GCTD Then
+          Call RELLENA_FICH([F:MWS3]WCRFCY,[F:MWS3]WST,GBOM,GBOMALT,GROU,[M:YNM0]YROUALT)
+        Endif
+      When 2  # tiempo natural
+        If [F:YMP1]YUNIDAD = 2 Then      # días
+          If arr((TOT_TPO / 24),0.001) >= GCTD Then
+            Call RELLENA_FICH([F:MWS3]WCRFCY,[F:MWS3]WST,GBOM,GBOMALT,GROU,[M:YNM0]YROUALT)
+          Endif
+        Endif
+        If [F:YMP1]YUNIDAD = 2 Then      # semanas
+          If arr(((TOT_TPO / 24) / 7),0.001) >= GCTD Then
+            Call RELLENA_FICH([F:MWS3]WCRFCY,[F:MWS3]WST,GBOM,GBOMALT,GROU,[M:YNM0]YROUALT)
+          Endif
+        Endif
+        If [F:YMP1]YUNIDAD = 2 Then      # meses
+          If arr((((TOT_TPO / 24) / 7) / 30),0.001) >= GCTD Then
+            Call RELLENA_FICH([F:MWS3]WCRFCY,[F:MWS3]WST,GBOM,GBOMALT,GROU,[M:YNM0]YROUALT)
+          Endif
+        Endif
+      When 3   # unidades producidas
+        If TOT_CTD >= GCTD Then
+          Call RELLENA_FICH([F:MWS3]WCRFCY,[F:MWS3]WST,GBOM,GBOMALT,GROU,[M:YNM0]YROUALT)
+        Endif
+    Endcase
+
+    $NEXT_CT
+  Next
+
+  # cierra el fichero
+  Gosub CLOSE_FILE_W
+
+  # lanza la orden de fabricación
+  Call IMPORT_FILE("Creación de OF's Mantenimiento Preventivo","YGMAO",LFILE_W,1) From SPEYLIB0
+
+Return
+
+########################################################
+# YAPMP
+$GEN_FILE_W
+  LFECHA = vireblc(num$(date$),4) : LFECHA = mid$(LFECHA,1,2)+mid$(LFECHA,4,2)+mid$(LFECHA,7,4)
+  LHORA  = vireblc(num$(time$),4) : LHORA  = mid$(LHORA,1,2)+mid$(LHORA,4,2)
+
+  LFILE_W = LDIRIMPORT + LFILE_W + "_" + LFECHA + LHORA + ".txt"
+
+  # borramos el fichero si existe...
+  If filinfo(LFILE_W, 7) > 0 Then
+    System "ae_rm " + LFILE_W
+  Endif
+
+  Sleep 1
+Return
+# YAPMP
+
+########################################################
+# YAPMP
+$OPEN_FILE_W
+  adxifs = ";"
+  adxirs = chr$(13)+chr$(10)
+  Openo LFILE_W Using [ZIMP_W]
+Return
+# YAPMP
+
+########################################################
+# YAPMP
+$CLOSE_FILE_W
+  Openo Using [ZIMP_W]
+Return
+# YAPMP
+
+##############################################################
+#################    ACCIONES DE CAMPO    ####################
+##############################################################
+######################################################################################
+## Después de modificar el campo "Centro de trabajo inicial"
+######################################################################################
+Subprog AM_YWSTINI(VALEUR)
+Variable Char    VALEUR()
+# YAPMP
+  If VALEUR = "" Then [M:YNM0]YWSTINIDESC = "" : Endif
+  Affzo [M:YNM0]YWSTINIDESC
+# YAPMP
+End
+
+######################################################################################
+## Después de modificar el campo "Centro de trabajo final"
+######################################################################################
+Subprog AM_YWSTFIN(VALEUR)
+Variable Char    VALEUR()
+# YAPMP
+  If VALEUR = "" Then [M:YNM0]YWSTFINDESC = "" : Endif
+  Affzo [M:YNM0]YWSTFINDESC
+# YAPMP
+End
+
+##############################################################
+##################    FUNCIONES PROPIAS    ###################
+##############################################################
+#######################
+# YAPMP
+#**
+#* genera fichero de importación
+#*
+#* @param PFCY      > planta
+#* @param PWST      > centro de trabajo
+#*!
+Subprog RELLENA_FICH(PFCY,PWST,PBOM,PBOMALT,PROU,PROUALT)
+Value Char PFCY
+Value Char PWST
+Value Char PBOM
+Value Integer PBOMALT
+Value Char PROU
+Value Integer PROUALT
+
+Local Char LDATMFG(250)(1..12) : Raz LDATMFG
+Local Char LSEP(1) : LSEP = ";"  # separador
+
+      ######
+      # Campos del modelo
+      ######
+      # 1  -> Planta de producción                (MFGFCY)
+      # 2  -> Alternativa estruct.                (BOMALT)
+      # 3  -> Código de artículo                  (ITMREF)
+      # 4  -> Fecha inicial                       (STRDAT)
+      # 5  -> Fecha final                         (ENDDAT)
+      # 6  -> Cantidad prevista                   (EXTQTY)
+      # 7  -> Número de orden                     (MFGNUM)
+      # 8  -> Ruta                                (*1)
+      # 9  -> Alternativa                         (*2)
+      # 10 -> Código actualización                (*3)
+      # 11 -> Estado de la orden                  (*4)
+      # 12 -> Tipo de mantenimiento               (YMNTOTYP)
+      ######
+
+  LDATMFG(1)  = PFCY
+  LDATMFG(2)  = num$(PBOMALT)
+  LDATMFG(3)  = num$(PBOM)
+  LDATMFG(4)  = format$("N0:4",year(date$)) + format$("N0:2",month(date$)) + format$("N0:2",day(date$))
+  LDATMFG(5)  = format$("N0:4",year(date$)) + format$("N0:2",month(date$)) + format$("N0:2",day(date$))
+  LDATMFG(6)  = "1"
+  LDATMFG(7)  = ""
+  LDATMFG(8)  = num$(PROU)
+  LDATMFG(9)  = num$(PROUALT)
+  LDATMFG(10) = "C"
+  LDATMFG(11) = "1"
+  LDATMFG(12) = "3"
+
+  Wrseq LDATMFG(1) + LSEP + LDATMFG(2) + LSEP + LDATMFG(3) + LSEP + LDATMFG(4) + LSEP + LDATMFG(5) + LSEP + LDATMFG(6) + LSEP + LDATMFG(7) +
+& LSEP + LDATMFG(8) + LSEP + LDATMFG(9) + LSEP + LDATMFG(10) + LSEP + LDATMFG(11) + LSEP + LDATMFG(12) Using [ZIMP_W]
+
+End
+# YAPMP

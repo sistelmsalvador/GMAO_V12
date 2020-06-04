@@ -1,0 +1,811 @@
+#<AdxTL>@(#)0.0.0.0 $Revision$ 
+###############################################################################
+# Funciones                                                                   #
+###############################################################################
+#
+# Obtener el Mandato
+# GET_UMRNUM(YCPY,YBPR,YBPCADD,YUMRNUM)
+#
+###############################################################################
+
+#######################
+#**
+#* devuelve el siguiente número de contador para el código de contador indicado en PCDGCONT
+#*
+#* @param PCDGCONT  > código del contador
+#* @param PSTRDAT   > fecha inicial
+#* @param PSEQCODE  > devuelve número de contador
+#*!
+Subprog GENNUMBER(PCDGCONT,PSTRDAT,PSEQCODE)
+Value     Char PCDGCONT
+Value     Date PSTRDAT
+Variable  Char PSEQCODE
+Local Integer STAT
+  Call NUMERO(PCDGCONT, nomap, PSTRDAT, "null", PSEQCODE, STAT) From SUBANM
+End
+
+#######################
+#**
+#* obtiene el precio de reposición de un artículo en base a su proveedor principal
+#*
+#* @param PITMREF  > código de artículo
+#* @param PPRIREP  > devuelve el precio de reposición
+#*!
+Subprog GET_PRIREP(PITMREF, PPRIREP)
+Value     Char    PITMREF
+Variable  Decimal PPRIREP
+
+Local Decimal LPRI, LDESC1, LDESC2, LDESC3, LDESC4, LDESC5, LBONIF1, LBONIF2 : Raz LPRI, LDESC1, LDESC2, LDESC3, LDESC4, LDESC5, LBONIF1, LBONIF2
+Local Decimal LIPTDAT : Raz LIPTDAT
+Local Integer LCON3 : Raz LCON3
+
+  If !clalev([F:YITP]) Then : Local File ITMBPS     [F:YITP] : Endif
+  If !clalev([F:YPP1]) Then : Local File PPRICLIST  [F:YPP1] : Endif
+  If !clalev([F:YPP2]) Then : Local File PPRICLIST  [F:YPP2] : Endif
+  Filter [F:YITP] Where ITMREF = PITMREF and PIO = 0
+  Read [F:YITP] First
+  If !fstat Then
+    Filter [F:YPP2] Where PLI = "T30" and PLICRI1 = [F:YITP]BPSNUM and PLICRI2 = [F:YITP]YSECC2 #and PLISTRDAT >= date$ and PLIENDDAT <= date$
+    Read [F:YPP2] First
+    If !fstat Then
+      LDESC1  = [F:YPP2]DCGVAL(0)
+      LDESC2  = [F:YPP2]DCGVAL(1)
+      LBONIF1 = [F:YPP2]DCGVAL(2)
+    Endif
+    Filter [F:YPP2]
+
+    Filter [F:YPP1] Where PLI = "T20" and PLICRI1 = [F:YITP]BPSNUM and PLICRI2 = [F:YITP]ITMREF #and PLISTRDAT >= date$ and PLIENDDAT <= date$
+    Read [F:YPP1] First
+    If !fstat Then
+      LPRI     = [F:YPP1]PRI
+      LDESC3   = [F:YPP1]DCGVAL(3)
+      LDESC4   = [F:YPP1]DCGVAL(4)
+      LDESC5   = [F:YPP1]DCGVAL(5)
+      LBONIF2  = [F:YPP1]DCGVAL(6)
+    Endif
+    Filter [F:YPP1]
+  Endif
+  Filter [F:YITP]
+  If clalev([F:YITP])  Then : Close Local File  [F:YITP] : Endif
+  If clalev([F:YPP1])  Then : Close Local File  [F:YPP1] : Endif
+  If clalev([F:YPP2])  Then : Close Local File  [F:YPP2] : Endif
+
+  LIPTDAT = LPRI
+  If LDESC1 <> 0 Then
+    LIPTDAT = ar2(LIPTDAT * (1-(LDESC1/100)))
+  Endif
+  If LDESC2 <> 0 Then
+    LIPTDAT = ar2(LIPTDAT * (1-(LDESC2/100)))
+  Endif
+  If LBONIF1 <> 0 Then
+    LIPTDAT = ar2(LIPTDAT - LBONIF1)
+  Endif
+  If LDESC3 <> 0 Then
+    LIPTDAT = ar2(LIPTDAT * (1-(LDESC3/100)))
+  Endif
+  If LDESC4 <> 0 Then
+    LIPTDAT = ar2(LIPTDAT * (1-(LDESC4/100)))
+  Endif
+  If LDESC5 <> 0 Then
+    LIPTDAT = ar2(LIPTDAT * (1-(LDESC5/100)))
+  Endif
+  If LBONIF2 <> 0 Then
+    LIPTDAT = ar2(LIPTDAT - LBONIF2)
+  Endif
+
+  PPRIREP = LIPTDAT
+End
+
+#######################
+#**
+#* devuelve el ejercicio de una fecha dentro de la tabla PERIOD
+#*
+#* @param PCPY      > sociedad
+#* @param PLEDTYP   > tipo de referencial
+#* @param PSRCDAT   > fecha a buscar
+#* @param PFIYNUM   > ejercicio
+#*!
+Subprog GET_EJERCICIO(PCPY, PLEDTYP, PSRCDAT, PFIYNUM)
+Value     Char    PCPY
+Value     Integer PLEDTYP
+Value     Date    PSRCDAT
+Variable  Integer PFIYNUM
+
+Local     Char    LCRIT1(250)
+
+  PFIYNUM = -1
+  LCRIT1 = "1=1"
+
+  If PCPY     <> ""             Then  : LCRIT1 += " AND CPY = PCPY " : Endif
+  If PLEDTYP  <> 0              Then  : LCRIT1 += " AND LEDTYP = PLEDTYP " : Endif
+  If PSRCDAT  <> [00/00/0000]   Then  : LCRIT1 += " AND PERSTR <= PSRCDAT AND PEREND >= PSRCDAT" : Endif
+
+  If !clalev([F:YPER]) Then : Local File PERIOD [F:YPER]  : Endif
+  Filter [F:YPER] Where evalue(LCRIT1)
+  Read [F:YPER] First
+  If !fstat Then
+    PFIYNUM = [F:YPER]FIYNUM
+  Endif
+  Filter [F:YPER]
+  If clalev([F:YPER])  Then : Close Local File [F:YPER]    : Endif
+
+End
+
+#######################
+#**
+#* devuelve el coste estándar de un producto
+#* @param PITMREF     > código del artículo
+#* @param PSTOFCY     > planta stock
+#* @param PECCVALMAJ  > versión mayor
+#* @param PECCVALMIN  > versión menor
+#* @param PFIYNUM     > ejercicio
+#* @param PVLTTOT     > coste total
+#*!
+Subprog GET_VLTTOT(PITMREF, PSTOFCY, PECCVALMAJ, PECCVALMIN, PFIYNUM, PVLTTOT)
+Value     Char    PITMREF
+Value     Char    PSTOFCY
+Value     Char    PECCVALMAJ
+Value     Char    PECCVALMIN
+Value     Integer PFIYNUM
+Variable  Decimal PVLTTOT
+
+Local     Char    LCRIT2(250)
+
+  PVLTTOT = -123456789
+
+  LCRIT2 = "1=1"
+  If PSTOFCY    <> "" Then : LCRIT2 += " AND STOFCY = PSTOFCY"        : Endif
+  If PITMREF    <> "" Then : LCRIT2 += " AND ITMREF = PITMREF"        : Endif
+  If PECCVALMAJ <> "" Then : LCRIT2 += " AND ECCVALMAJ = PECCVALMAJ"  : Endif
+  If PECCVALMIN <> "" Then : LCRIT2 += " AND ECCVALMIN = PECCVALMIN"  : Endif
+  If PFIYNUM    <> 0  Then : LCRIT2 += " AND FIYNUM = PFIYNUM"        : Endif
+  If !clalev([F:YITC]) Then : Local File ITMCOST  [F:YITC] : Endif
+  Filter [F:YITC] Where evalue(LCRIT2)
+  Read [F:YITC] First
+  If !fstat Then
+    PVLTTOT = [F:YITC]VLTTOT
+  Endif
+  Filter [F:YITC]
+  If clalev([F:YITC])  Then : Close Local File    [F:YITC] : Endif
+
+End
+
+#######################
+#**
+#* Busco componente en estructuras y traigo el artículo padre
+#*!
+Subprog ARTICULO_ORIGEN(VART,VASIORI,VORI)
+Value Char VART
+Value Char VASIORI
+Variable Char VORI
+
+If !clalev([XX0])   : Local File BOMD    [XX0]   : Endif
+If !clalev([XX1])   : Local File BOM     [XX1]   : Endif
+If !clalev([XX2])   : Local File MFGITM  [XX2]   : Endif
+
+Filter [XX2] Where [XX2]MFGNUM = VASIORI
+Read [XX2] First
+If fstat = 0
+  VORI = [XX2]ITMREF
+Endif
+Filter [XX2]
+
+If VORI = ""
+  For [XX0] Where [XX0]CPNITMREF = VART
+    For [XX1] Where [XX1]ITMREF = [XX0]ITMREF and [XX1]USESTA = 2
+      VORI = [XX1]ITMREF
+      Break 2
+    Next
+  Next
+Endif
+
+Close Local File [XX0],[XX1],[XX2]
+End
+
+#######################
+#**
+#* Busco ahora el artículo estructura (artículo origen del artículo origen de la línea del pedido. Primero lo busco en el proyecto-tarea directamente)
+#*!
+Subprog ARTICULO_BOM(VORI,VPRO,VBOM)
+Value Char VORI
+Value Char VPRO
+Variable Char VBOM
+
+If !clalev([YZZ0])   : Local File PJMTSK     [YZZ0]   : Endif
+If !clalev([YZZ1])   : Local File PJMTSKITM  [YZZ1]   : Endif
+
+Read [YZZ0]PTA1 = VPRO
+If fstat = 0
+  Filter [YZZ1] Where [YZZ1]OPPNUM = [YZZ0]OPPNUM and [YZZ1]TASCOD = [YZZ0]TASCOD
+  Read [YZZ1] First
+  If fstat = 0
+    VBOM = [YZZ1]ITMREF
+  Endif
+  Filter [YZZ1]
+Endif
+
+Close Local File [YZZ0],[YZZ1]
+
+If VBOM = ""
+  If !clalev([XX0])   : Local File BOMD    [XX0]   : Endif
+  If !clalev([XX1])   : Local File BOM     [XX1]   : Endif
+
+  For [XX0] Where [XX0]CPNITMREF = VORI and [XX0]BOMALTTYP = 2
+    For [XX1] Where [XX1]ITMREF = [XX0]ITMREF and [XX1]USESTA = 2
+      VBOM = [XX1]ITMREF
+      Break 2
+    Next
+  Next
+  Close Local File [XX0],[XX1]
+Endif
+End
+
+#######################
+#**
+#* Si el asiento origen es una orden de subcontratación, tengo que llegar a la OF (nivel superior)
+#*!
+Subprog ARTICULO_SUB(VCR,VITM,VPJT,VSUB)
+Value Char VCR
+Value Char VITM
+Value Char VPJT
+Variable Char VSUB
+
+If !clalev([YY0])   : Local File MFGHEAD    [YY0]   : Endif
+If !clalev([YY1])   : Local File SCOHEAD    [YY1]   : Endif
+If !clalev([YY2])   : Local File MFGITM     [YY2]   : Endif
+
+Read [YY0]MFG0 = VCR
+If fstat <> 0
+  Read [YY1]SCO0 = VCR
+  If fstat = 0  # En este caso el asiento origen es una orden de subcontratación
+    Filter [YY2] Where [YY2]ITMREF = VITM and [YY2]PJT =  VPJT and [YY2]ITMSTA < 3 and [YY2]MFGSTA = 1
+    Read [YY2] First
+    If fstat = 0
+      VSUB = [YY2]MFGNUM
+    Endif
+    Filter [YY2]
+  Endif
+Endif
+
+Close Local File [YY0],[YY1],[YY2]
+End
+
+#######################
+#**
+#* Si el asiento origen es una solicitud de compra, tengo que llegar a la OF (nivel superior)
+#*!
+Subprog ARTICULO_SC(VCR,VITM,VPJT,VSC)
+Value Char VCR
+Value Char VITM
+Value Char VPJT
+Variable Char VSC
+
+If !clalev([YY0])   : Local File MFGHEAD    [YY0]   : Endif
+If !clalev([YY1])   : Local File PREQUIS    [YY1]   : Endif
+If !clalev([YY2])   : Local File MFGITM     [YY2]   : Endif
+
+Read [YY0]MFG0 = VCR
+If fstat <> 0
+  Read [YY1]PSH0 = VCR
+  If fstat = 0  # En este caso el asiento origen es una solicitud de compra
+    Filter [YY2] Where [YY2]ITMREF = VITM and [YY2]PJT =  VPJT and [YY2]ITMSTA < 3 and [YY2]MFGSTA = 1
+    Read [YY2] First
+    If fstat = 0
+      VSC = [YY2]MFGNUM
+    Endif
+    Filter [YY2]
+  Endif
+Endif
+
+Close Local File [YY0],[YY1],[YY2]
+End
+
+#######################
+#**
+#* Traigo la descripción del componente de la estructura
+#*!
+Subprog DESCRIP_BOM(VCOMPUESTO,VCPTE,VDES_BOM)
+Value Char VCOMPUESTO
+Value Char VCPTE
+Variable Char VDES_BOM
+
+If !clalev([XX0])   : Local File BOMD    [XX0]   : Endif
+
+For [XX0] Where [XX0]ITMREF = VCOMPUESTO and [XX0]CPNITMREF = VCPTE
+  VDES_BOM = [XX0]BOMSHO
+  Break
+Next
+
+Close Local File [XX0]
+End
+
+#######################
+#**
+#* importación de un fichero con modelo import/export
+#*
+#* @param PMESS     > mensaje a mostrar en la pantalla de progreso
+#* @param PMODEL    > modelo import/export
+#* @param PFILE     > fichero a importar
+#* @param PTRACE    > mostrar traza: 0=No , 1=Si
+#*!
+Subprog IMPORT_FILE(PMESS,PMODEL,PFILE,PTRACE)
+Value     Char    PMESS
+Value     Char    PMODEL
+Value     Char    PFILE
+Value     Integer PTRACE
+
+  If !GSERVEUR Then
+    mkstat = 0 : fstat = 0 : GERRTRACE = 0
+    # Lanzamiento de la importación silenciosa
+    Call TEMPON("Proceso de generación de OF's") From GESECRAN
+    Call OUVRE_TRACE(PMESS) From LECFIC
+    Call ECR_TRACE(PMESS,0) From GESECRAN
+
+    # importar fichero..
+    Call IMPORTSIL(PMODEL,PFILE) From GIMPOBJ
+
+    Call TEMPOFF() From GESECRAN
+
+    Call FERME_TRACE From LECFIC
+
+    # si se quiere mostrar traza, sino dejarla comentada Call LEC_TRACE From LECFIC
+    If PTRACE = 1 Then
+      Call LEC_TRACE From LECFIC
+    Endif
+
+    mkstat = 0 : fstat = 0 : GERRTRACE = 0
+  Endif
+End
+
+#######################
+#**
+#* limpia caracteres extraños en una cadena
+#*
+#* @param PCHARIN   > cadena a limpiar
+#* @param PCHAROUT  > cadena limpia
+#*!
+Subprog LIMPIA_STR(PCHARIN,PCHAROUT)
+Value     Char  PCHARIN
+Variable  Char  PCHAROUT
+
+Local Char PSTR(250) : PSTR=PCHARIN
+
+  PSTR=ctrans(PSTR,"Ã¡" ,"a") : PSTR=ctrans(PSTR,"Ã " ,"a") : PSTR=ctrans(PSTR,"Ã¤" ,"a")
+  PSTR=ctrans(PSTR,"Ã¢" ,"a") : PSTR=ctrans(PSTR,"Âª" ,"a") : PSTR=ctrans(PSTR,"Ã?" ,"A")
+  PSTR=ctrans(PSTR,"Ã€" ,"A") : PSTR=ctrans(PSTR,"Ã‚" ,"A") : PSTR=ctrans(PSTR,"Ã„" ,"A")
+  PSTR=ctrans(PSTR,"Ã©" ,"e") : PSTR=ctrans(PSTR,"Ã¨" ,"e") : PSTR=ctrans(PSTR,"Ã«" ,"e")
+  PSTR=ctrans(PSTR,"Ãª" ,"e") : PSTR=ctrans(PSTR,"Ã‰" ,"E") : PSTR=ctrans(PSTR,"Ãˆ" ,"E")
+  PSTR=ctrans(PSTR,"ÃŠ" ,"E") : PSTR=ctrans(PSTR,"Ã‹" ,"E") : PSTR=ctrans(PSTR,"Ã­" ,"i")
+  PSTR=ctrans(PSTR,"Ã¬" ,"i") : PSTR=ctrans(PSTR,"Ã¯" ,"i") : PSTR=ctrans(PSTR,"Ã®" ,"i")
+  PSTR=ctrans(PSTR,"Ã?" ,"I") : PSTR=ctrans(PSTR,"ÃŒ" ,"I") : PSTR=ctrans(PSTR,"Ã?" ,"I")
+  PSTR=ctrans(PSTR,"ÃŽ" ,"I") : PSTR=ctrans(PSTR,"Ã³" ,"o") : PSTR=ctrans(PSTR,"Ã²" ,"o")
+  PSTR=ctrans(PSTR,"Ã¶" ,"o") : PSTR=ctrans(PSTR,"Ã´" ,"o") : PSTR=ctrans(PSTR,"Ã“" ,"O")
+  PSTR=ctrans(PSTR,"Ã’" ,"O") : PSTR=ctrans(PSTR,"Ã–" ,"O") : PSTR=ctrans(PSTR,"Ã”" ,"O")
+  PSTR=ctrans(PSTR,"Ãº" ,"u") : PSTR=ctrans(PSTR,"Ã¹" ,"u") : PSTR=ctrans(PSTR,"Ã¼" ,"u")
+  PSTR=ctrans(PSTR,"Ã»" ,"u") : PSTR=ctrans(PSTR,"Ãš" ,"U") : PSTR=ctrans(PSTR,"Ã™" ,"U")
+  PSTR=ctrans(PSTR,"Ã›" ,"U") : PSTR=ctrans(PSTR,"Ãœ" ,"U") : PSTR=ctrans(PSTR,"Ã±" ,"n")
+  PSTR=ctrans(PSTR,"Ã‘" ,"N") : PSTR=ctrans(PSTR,"Ã§" ,"c") : PSTR=ctrans(PSTR,"Ã‡" ,"C")
+  PSTR=ctrans(PSTR,"\" ,"")  : PSTR=ctrans(PSTR,"Â¨" ,"")  : PSTR=ctrans(PSTR,"Âº" ,"")
+  PSTR=ctrans(PSTR,"~" ,"")  : PSTR=ctrans(PSTR,"#" ,"")  : PSTR=ctrans(PSTR,"@" ,"")
+  PSTR=ctrans(PSTR,"|" ,"")  : PSTR=ctrans(PSTR,"!" ,"")  : PSTR=ctrans(PSTR,'"' ,"")
+  PSTR=ctrans(PSTR,"*" ,"")  : PSTR=ctrans(PSTR,"Â·" ,"")  : PSTR=ctrans(PSTR,"$" ,"")
+  PSTR=ctrans(PSTR,"%" ,"")  : PSTR=ctrans(PSTR,"&" ,"")  : PSTR=ctrans(PSTR,"(" ,"")
+  PSTR=ctrans(PSTR,")" ,"")  : PSTR=ctrans(PSTR,"?" ,"")  : PSTR=ctrans(PSTR,"'" ,"")
+  PSTR=ctrans(PSTR,"Â¡" ,"")  : PSTR=ctrans(PSTR,"Â¿" ,"")  : PSTR=ctrans(PSTR,"[" ,"")
+  PSTR=ctrans(PSTR,"^" ,"")  : PSTR=ctrans(PSTR,"<" ,"")  : PSTR=ctrans(PSTR,">" ,"")
+  PSTR=ctrans(PSTR,"]" ,"")  : PSTR=ctrans(PSTR,"+" ,"")  : PSTR=ctrans(PSTR,"}" ,"")
+  PSTR=ctrans(PSTR,"{" ,"")  : PSTR=ctrans(PSTR,"Â´" ,"")  : PSTR=ctrans(PSTR,";" ,"")
+  PSTR=ctrans(PSTR," " ,"")  : PSTR=ctrans(PSTR,":" ,"")  : PSTR=ctrans(PSTR,"." ,"")
+  PSTR=ctrans(PSTR,"/" ,"")
+
+  PCHAROUT = PSTR
+
+End
+
+#######################
+#**
+#* devuelve la sociedad a partir de una planta
+#*
+#* @param PFCY      > planta
+#* @param PLEGCPY   > devuelve la sociedad jurídica
+#*!
+Subprog GET_LEGCPY(PFCY,PLEGCPY)
+Value     Char PFCY
+Variable  Char PLEGCPY
+  If !clalev([F:YFCY]) Then : Local File FACILITY [F:YFCY] : Endif
+  Read [F:YFCY]FCY0 = PFCY
+  If !fstat Then
+    PLEGCPY = [F:YFCY]LEGCPY
+  Endif
+  If clalev([F:YFCY])  Then : Close Local File    [F:YFCY] : Endif
+End
+
+#####################################################################
+# *******************************************************************
+#####################################################################
+#**
+#* Envía por mail a destinatario una factura de venta
+#*
+#* @param PFACVEN   > número de la factura de venta
+#* @param PINFNAM   > nombre del informe
+#* @param PDESTINO  > nombre del destino
+#*!
+Subprog ENVMAIL_SIH(PFACVEN, PINFNAM, PDESTINO)
+Value     Char    PINFNAM
+Value     Char    PFACVEN
+Value     Char    PDESTINO
+
+  If !clalev([F:YSIV0]) : Local File SINVOICEV   [F:YSIV0] : Endif
+  If !clalev([F:YTSV0]) : Local File TABSIVTYP   [F:YTSV0] : Endif
+
+  Local Char    TBPAR(20)(1..20)
+  Local Char    TBVAL(20)(1..20)
+  Local Integer LIMPFAC # estado impresión factura
+
+  Raz TBPAR, TBVAL, LIMPFAC
+
+  # que exista la factura..
+  Read [F:YSIV0]SIV0 = PFACVEN
+  If !fstat Then
+
+    # solo se lanza cuando son facturas o abonos - MS 06042020
+    Filter [F:YTSV0] Where [F:YTSV0]SIVTYP = [F:YSIV0]SIVTYP
+    Read [F:YTSV0]TSV1 First
+    If !fstat Then
+      # solo facturas o abonos...
+      If [F:YTSV0]INVTYP = 1 or [F:YTSV0]INVTYP = 2 Then
+        # tipo de impresión a aplicar al informe..
+        If [F:YSIV0]STARPT <> 0
+          LIMPFAC = [F:YSIV0]STARPT
+        Else
+          LIMPFAC = 1
+        Endif
+
+        # parámetros del informe
+        TBPAR(1)  = "sitedeb"         : TBVAL(1)  = [F:YSIV0]SALFCY
+        TBPAR(2)  = "sitefin"         : TBVAL(2)  = [F:YSIV0]SALFCY
+        TBPAR(3)  = "facturedeb"      : TBVAL(3)  = [F:YSIV0]NUM
+        TBPAR(4)  = "facturefin"      : TBVAL(4)  = [F:YSIV0]NUM
+        TBPAR(5)  = "typedeb"         : TBVAL(5)  = "1" # factura
+        TBPAR(6)  = "typefin"         : TBVAL(6)  = "2" # abono
+        TBPAR(7)  = "clientdeb"       : TBVAL(7)  = [F:YSIV0]BPCINV
+        TBPAR(8)  = "clientfin"       : TBVAL(8)  = [F:YSIV0]BPCINV
+        TBPAR(9)  = "datedeb"         : TBVAL(9)  = [F:YSIV0]INVDAT
+        TBPAR(10) = "datefin"         : TBVAL(10) = [F:YSIV0]INVDAT
+        TBPAR(11) = "codimp"          : TBVAL(11) = num$(LIMPFAC) # re-impresión [SIV]STARPT
+        TBPAR(12) = "impselections"   : TBVAL(12) = "1" # no
+        TBPAR(13) = "duplicata"       : TBVAL(13) = "1" # no
+        TBPAR(14) = "repdeb"          : TBVAL(14) = [F:YSIV0]REP
+        TBPAR(15) = "repfin"          : TBVAL(15) = [F:YSIV0]REP
+
+        # lanza el informe..
+        Call ETAT(PINFNAM, PDESTINO, "SPA", 0, "", TBPAR, TBVAL) From AIMP3
+        # MAB.18022020.NEW
+        Call ECR_TRACE("Factura " + [F:YSIV0]NUM + " enviada por correo electrónico", 0) From GESECRAN
+
+      Endif
+    Endif
+  Endif
+
+  Close Local File [F:YSIV0],[F:YTSV0]
+
+End
+
+#####################################################################
+# *******************************************************************
+#####################################################################
+#**
+#* Envía por destino una factura de venta.
+#*
+#* @param PFACVEN   > número de la factura de venta
+#* @param PINFNAM   > nombre del informe
+#* @param PDESTINO  > nombre del destino
+#*!
+Subprog ENVDEST_SIH(PFACVEN, PINFNAM, PDESTINO)
+Value     Char    PINFNAM
+Value     Char    PFACVEN
+Value     Char    PDESTINO
+
+  If !clalev([F:YSIV0]) : Local File SINVOICEV   [F:YSIV0] : Endif
+  If !clalev([F:YTSV0]) : Local File TABSIVTYP   [F:YTSV0] : Endif
+
+  Local Char    TBPAR(20)(1..20)
+  Local Char    TBVAL(20)(1..20)
+  Local Char    LFILE(200)
+  Local Integer LIMPFAC # estado impresión factura
+
+  Raz TBPAR, TBVAL, LFILE, LIMPFAC
+
+  # que exista la factura..
+  Read [F:YSIV0]SIV0 = PFACVEN
+  If !fstat Then
+    # solo se lanza cuando son facturas.. (no abonos)
+    Filter [F:YTSV0] Where [F:YTSV0]SIVTYP = [F:YSIV0]SIVTYP
+    Read [F:YTSV0]TSV1 First
+    If !fstat Then
+      # solo facturas..
+      If [F:YTSV0]INVTYP = 1 Then
+        # tipo de impresión a aplicar al informe..
+        If [F:YSIV0]STARPT <> 0
+          LIMPFAC = [F:YSIV0]STARPT
+        Else
+          LIMPFAC = 1
+        Endif
+
+        # parámetros del informe
+        TBPAR(1)  = "sitedeb"         : TBVAL(1)  = [F:YSIV0]SALFCY
+        TBPAR(2)  = "sitefin"         : TBVAL(2)  = [F:YSIV0]SALFCY
+        TBPAR(3)  = "facturedeb"      : TBVAL(3)  = [F:YSIV0]NUM
+        TBPAR(4)  = "facturefin"      : TBVAL(4)  = [F:YSIV0]NUM
+        TBPAR(5)  = "typedeb"         : TBVAL(5)  = "1" # factura
+        TBPAR(6)  = "typefin"         : TBVAL(6)  = "1" # facura
+        TBPAR(7)  = "clientdeb"       : TBVAL(7)  = [F:YSIV0]BPCINV
+        TBPAR(8)  = "clientfin"       : TBVAL(8)  = [F:YSIV0]BPCINV
+        TBPAR(9)  = "datedeb"         : TBVAL(9)  = [F:YSIV0]INVDAT
+        TBPAR(10) = "datefin"         : TBVAL(10) = [F:YSIV0]INVDAT
+        TBPAR(11) = "codimp"          : TBVAL(11) = num$(LIMPFAC) # re-impresión [SIV]STARPT
+        TBPAR(12) = "impselections"   : TBVAL(12) = "1" # no
+        TBPAR(13) = "duplicata"       : TBVAL(13) = "1" # no
+        TBPAR(14) = "repdeb"          : TBVAL(14) = [F:YSIV0]REP
+        TBPAR(15) = "repfin"          : TBVAL(15) = [F:YSIV0]REP
+
+
+        # lanza el informe..
+        Call ETAT(PINFNAM, PDESTINO, "SPA", 0, "", TBPAR, TBVAL) From AIMP3
+
+      Endif
+    Endif
+  Endif
+
+  Close Local File [F:YSIV0],[F:YTSV0]
+
+End
+
+#####################################################################
+# *******************************************************************
+#####################################################################
+#**
+#* Encuentra el centro de trabajo sin mantenimiento ligado a un centro
+#* de trabajo de Preactor
+#*
+#* @param PCTPREACTOR   > centro de trabajo de Preactor
+#* @param PWCRFCY       > planta asociada al centro de trabajo
+#* @param PWSTCONMNTO   > centro de trabajo de producción
+#*!
+Subprog GET_WSTSINMNTO(PCTPREACTOR, PWCRFCY, PWSTCONMNTO)
+Value     Char    PCTPREACTOR
+Value     Char    PWCRFCY
+Variable  Char    PWSTCONMNTO
+
+  If PCTPREACTOR <> ""
+    If !clalev([F:MWS0]) Then : Local File WORKSTATIO   [F:MWS0] : Endif
+    If !clalev([F:YMP0]) Then : Local File YMNTOCT      [F:YMP0] : Endif
+    For [MWS0] Where WCRFCY = PWCRFCY and YCTPREACTOR = PCTPREACTOR
+      Read [F:YMP0]YMP0 = [F:MWS0]WST;[F:MWS0]WCRFCY
+      If (fstat = 0 and [F:YMP0]YGESFLG <> 2) or fstat <> 0
+        PWSTCONMNTO = [F:MWS0]WST                                                                 # CT que define la línea asociada al CT de mantenimiento
+        Break
+      Endif
+    Next
+    Close Local File [F:MWS0],[F:YMP0]
+  Endif
+
+End
+
+#####################################################################
+# *******************************************************************
+#####################################################################
+#**
+#* Horas de funcionamiento del CT desde una fecha determinada (datos de los seguimientos)
+#*
+#* @param PCPLWST       > centro de trabajo
+#* @param PFCY          > planta
+#* @param POPEEND       > fecha
+#* @param PCPLQTY       > cantidad total realizada
+#* @param PCPLTIM       > tiempo total realizado
+#*!
+Subprog GET_SUM_MTK(PCPLWST,PFCY,POPEEND,PCPLQTY,PCPLTIM)
+Value     Char    PCPLWST
+Value     Char    PFCY
+Value     Date    POPEEND
+Variable  Decimal PCPLQTY
+Variable  Decimal PCPLTIM
+
+Local Char SQLSENT(250)(1..4)
+
+  SQLSENT(1) = "SELECT CPLWST_0, SUM(CPLQTY_0) AS SUMCPLQTY, SUM(CPLOPETIM_0) AS SUMCPLOPETIM "
+  SQLSENT(2) = "FROM "+nomap+".MFGOPETRK "
+  SQLSENT(3) = "WHERE IPTDAT_0 >= '" + POPEEND + "' AND MFGFCY_0 = '" + PFCY + "' AND CPLWST_0 = '" + PCPLWST + "' "
+  SQLSENT(4) = "GROUP BY CPLWST_0"
+  For (Char CPLWST, Decimal SUMCPLQTY, Decimal SUMCPLOPETIM) From "5" Sql SQLSENT(1..4) As [Y00]
+    PCPLQTY = [F:Y00]SUMCPLQTY
+    PCPLTIM = [F:Y00]SUMCPLOPETIM
+  Next
+End
+
+
+#####################################################################
+#**
+#* Horas de funcionamiento del CT previstos (datos de los seguimientos)
+#*
+#* @param PCPLWST       > centro de trabajo
+#* @param PFCY          > planta
+#* @param POPEEND       > fecha
+#* @param PCPLQTY       > cantidad total prevista
+#* @param PCPLTIM       > tiempo total previsto
+#*!
+Subprog GET_SUM_MFG(TCPLWST,TFCY,TOPEEND,TCPLQTY,TCPLTIM)
+Value     Char    TCPLWST
+Value     Char    TFCY
+Value     Date    TOPEEND
+Variable  Decimal TCPLQTY
+Variable  Decimal TCPLTIM
+
+# Saco primero parámetros de la planta
+If !clalev([PP2]) : Local File FACILITY [PP2] : Endif
+Local Integer HORIZON
+Local Integer WOP
+
+Read [PP2]FCY0 = TFCY
+If fstat = 0
+  HORIZON = [PP2]YHORIZONTE
+  WOP     = [PP2]YWOP
+Endif
+
+Close Local File [PP2]
+
+# Saco los datos de la OF
+If !clalev([PP3]) : Local File MFGOPE  [PP3] : Endif
+If !clalev([PP4]) : Local File MFGHEAD [PP4] : Endif
+
+Local Char CRITERIO(250)
+Local Date HOY : HOY = date$
+
+# Controlo que la OF esté En espera, planta, WOF/WOP, fechas
+CRITERIO = "[PP4]MFGTRKFLG=1 & [PP4]MFGFCY=TFCY & [PP4]STRDAT>=HOY & [PP4]STRDAT<=HOY+HORIZON & [PP4]YMNTOTYP=0"
+If WOP = 2
+  CRITERIO += " & ([PP4]MFGSTA=1 | [PP4]MFGSTA=2)"
+Else
+  CRITERIO += " & [PP4]MFGSTA=1"
+Endif
+
+For [PP3] Where [PP3]MFGFCY = TFCY and [PP3]EXTWST = TCPLWST
+  Filter [PP4] Where [PP4]MFGNUM = [PP3]MFGNUM and evalue(CRITERIO)
+  Read [PP4] First
+  If fstat = 0
+    TCPLQTY += [PP3]EXTQTY
+    TCPLTIM += [PP3]EXTOPETIM
+  Else
+    Goto NEXT_OF
+  Endif
+  Filter [PP4]
+
+  $NEXT_OF
+Next
+
+Close Local File [PP3],[PP4]
+End
+
+
+#####################################################################
+# *******************************************************************
+#####################################################################
+#**
+#* datos de la gama
+#*
+#* @param PGAMA     > gama
+#* @param PALT      > alternativa ruta
+#* @param PFECHA    > fecha último mantenimiento preventivo
+#* @param PUC       > unidad de control
+#* @param PCTD      > cantidad
+#* @param PUN       > unidad
+#* @param PBOM      > estructura producción
+#* @param PBOMALT   > alternativa estructura
+#* @param PROU      > ruta
+#*
+#*!
+Subprog GET_GAMA(PGAMA,PALT,PFECHA,PUC,PCTD,PUN,PBOMALT)
+Value     Char    PGAMA
+Value Integer     PALT
+Variable  Date    PFECHA
+Variable Integer  PUC
+Variable Decimal  PCTD
+Variable Integer  PUN
+Variable Integer  PBOMALT
+
+# La fecha del último preventivo la tomo directamente de la gama
+If !clalev([PP1]) : Local File YGAMAD    [PP1] : Endif
+If !clalev([PP0]) : Local File TABROUALT [PP0] : Endif
+
+
+Read [PP1]YGD1 = PGAMA;PALT
+If fstat = 0
+  PFECHA  = [PP1]FECHAULT
+  PUC     = [PP1]UDCRTL
+  PCTD    = [PP1]CANTIDAD
+  PUN     = [PP1]UNIDADES
+  PROU    = [PP1]ROUNUM
+  Read [PP0]TRO0 = PALT
+  If fstat = 0
+    PBOMALT = [PP0]BOMALT1
+  Endif
+Endif
+
+If PFECHA = [00/00/0000]
+  PFECHA = [01/01/2010]
+Endif
+
+Close Local File [PP0],[PP1]
+End
+
+#####################################################################
+# *******************************************************************
+#####################################################################
+#**
+#* Horas de funcionamiento y cantidad producida del CT teniendo en cuenta el horizonte
+#*
+#* @param PCPLWST       > centro de trabajo
+#* @param PWCRFCY       > planta asociada al centro de trabajo
+#* @param PCPLQTYHZ     > cantidad total realizada
+#* @param PCPLTIMHZ     > tiempo total realizado
+#*!
+Subprog GET_QTYTIMHORIZONTE(PCPLWST,PWCRFCY,PCPLQTYHZ,PCPLTIMHZ)
+Value     Char PCPLWST
+Value     Char PWCRFCY
+Variable  Decimal PCPLQTYHZ
+Variable  Decimal PCPLTIMHZ
+
+Local Decimal LHORIZONTE : Raz LHORIZONTE
+Local Char    SQLSENT(250)(1..4)
+If !clalev([F:FCY0]) Then : Local File FACILITY [F:FCY0] : Endif
+
+  # obtención del valor de la variable HORIZONTE
+  Read [F:FCY0]FCY0 = PWCRFCY
+  If !fstat Then
+    LHORIZONTE = date$ + [F:FCY]YHORIZONTE
+  Endif
+
+  SQLSENT(1) = "SELECT MFO.CPLWST_0, SUM(MFO.EXTQTY_0) AS SUMCPLQTYHZ, SUM(MFO.EXTOPETIM_0) AS SUMCPLOPETIMHZ "
+  SQLSENT(2) = "FROM "+nomap+".MFGOPE MFO "
+  SQLSENT(3) = "INNER JOIN "+nomap+".MFGHEAD MFG ON MFO.MFGNUM_0 = MFG.MFGNUM_0 "
+  SQLSENT(4) = "WHERE MFG.MFGSTA_0 = 1 "
+  SQLSENT(5) = "AND MFG.STRDAT_0 <= CONVERT(DATETIME, '"+year(LHORIZONTE)+"-"+month(LHORIZONTE)+"-"+day(LHORIZONTE)+"', 102)) "
+  SQLSENT(6) = "GROUP BY MFO.CPLWST_0"
+  For (Char CPLWST, Decimal SUMCPLQTYHZ, Decimal SUMCPLOPETIMHZ) From "5" Sql SQLSENT(1..6) As [Y00]
+    PCPLQTYHZ = [F:Y00]SUMCPLQTYHZ
+    PCPLTIMHZ = [F:Y00]SUMCPLOPETIMHZ
+  Next
+
+Kill SQLSENT
+If  clalev([F:FCY0]) Then : Close Local File    [F:FCY0] : Endif
+
+
+End
+
+#######################
+#**
+#* Obtener el Mandato
+#*
+#* @param YCPY    Sociedad
+#* @param YBPCADD Código Dirección
+#* @param YBPR    Tercero
+#* @param YUMRNUM Mandato
+#*!
+Subprog GET_UMRNUM(YCPY,YBPR,YBPCADD,YUMRNUM)
+Value     Char YCPY
+Value     Char YBPR
+Value     Char YBPCADD
+Variable  Char YUMRNUM
+
+If !clalev([YMDT]) : Local File MANDATE [YMDT] : Endif
+Filter [YMDT] Where CPY    = YCPY and
+&                   BPCNUM = YBPR and
+&                   BPCADD = YBPCADD
+
+Read [YMDT] First
+If !fstat
+  YUMRNUM = [YMDT]UMRNUM
+Endif
+
+End
+

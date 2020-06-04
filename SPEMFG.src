@@ -1,0 +1,214 @@
+#<AdxTL>@(#)0.0.0.0 $Revision$ 
+#####################################################################################
+# Src: SPEMFG
+#-------------------------------------------------------------------------------------
+# Proyecto: Estándar
+#-------------------------------------------------------------------------------------
+# Version: v12
+#-------------------------------------------------------------------------------------
+# YAPMP - Creación OF's Mantenimiento preventivo
+# Fecha inicio YAPMP: 21/05/2019
+# Desarrollador: JCH
+# Código de desarrollo: YAPMP
+# Descripción del desarrollo: Lanzamiento preventivo de órdenes de fabricación
+# Fecha: 21/05/2019
+# Codigo Actividad: YAPMP
+#######################################################################################
+
+$ACTION
+
+#If GUSER="AIT07" Then : Infbox ACTION : Endif
+Case ACTION
+  When "FILTRE"    :   Gosub FILTRE
+  When "INICRE"    :   Gosub INICRE
+  When "OUVRE"     :   Gosub OUVRE
+  When "FIN"       :   Gosub FIN
+Endcase
+
+Return
+
+##############################################################
+######################    ACCIONES    ########################
+##############################################################
+$FILTRE
+# Filtro registros en función de la transacción
+If GFLAG = "PO1"
+  If FILTSUP = "" : FILTSUP = "1=1" : Endif
+  FILTSUP += " & [F:MFG]YMNTOTYP < 3"
+Elsif GFLAG = "PO2"
+  If FILTSUP = "" : FILTSUP = "1=1" : Endif
+  FILTSUP += " & [F:MFG]YMNTOTYP > 2"
+Endif
+Return
+
+
+##############################################################
+$INICRE
+## Pongo contador si es una orden de GMAO
+#If [M:MFG0]YMNTOTYP > 2
+#  Local Char    LNUM
+#  Local Integer LSTAT
+#
+#  Call NUMERO("YOFGM", [M:MFG0]MFGFCY, [M:MFG1]STRDAT, "", LNUM, LSTAT)  From SUBANM
+#  If GOK=0 | LSTAT<>0
+#      GOK=0 : GERR=1 : GMESSAGE=GCODNUM-mess(60,199,1)
+#  Endif
+#
+#  If GOK = 0 or LSTAT <> 0 Then
+#      Return
+#  Elsif LNUM = "" Then
+#      GOK = 0: GERR = 1
+#      Return
+#  Endif
+#
+#  #Actualizamos el campo.
+#  [M:MFG0]MFGNUM  = LNUM
+#  [F:MFG]MFGNUM   = LNUM
+#  Affzo [M:MFG0]MFGNUM
+#Endif
+  # Pongo contador si es una orden de GMAO
+  If [M:MFG0]YMNTOTYP > 2
+    Local Char    LNUM
+    Local Integer LSTAT
+    Local Char    LCONTMFG(15)
+
+    Read [F:FCY0]FCY0 = [M:MFG0]MFGFCY
+    If !fstat Then
+     If [M:MFG0]YMNTOTYP = 3 Then
+        LCONTMFG = [F:FCY0]YCONTOFP         # contador
+      Elsif [M:MFG0]YMNTOTYP = 4
+        LCONTMFG  = [F:FCY0]YCONTOFC        # contador
+      Endif
+    Endif
+    Call NUMERO(LCONTMFG, [M:MFG0]MFGFCY, [M:MFG1]STRDAT, "", LNUM, LSTAT)  From SUBANM
+#    Call NUMERO("YOFGM", [M:MFG0]MFGFCY, [M:MFG1]STRDAT, "", LNUM, LSTAT)  From SUBANM
+    If GOK=0 | LSTAT<>0
+        GOK=0 : GERR=1 : GMESSAGE=GCODNUM-mess(60,199,1)
+    Endif
+
+    If GOK = 0 or LSTAT <> 0 Then
+        Return
+    Elsif LNUM = "" Then
+        GOK = 0: GERR = 1
+        Return
+    Endif
+
+    #Actualizamos el campo.
+    [M:MFG0]MFGNUM  = LNUM
+    [F:MFG]MFGNUM   = LNUM
+    Affzo [M:MFG0]MFGNUM
+
+  Endif
+Return
+
+##############################################################
+$OUVRE
+  If !clalev([F:FCY0]) Then : Local File FACILITY [F:FCY0] : Endif
+Return
+
+##############################################################
+$FIN
+  Close Local File [FCY0]
+Return
+
+
+##############################################################
+######################    ETIQUETAS    #######################
+##############################################################
+
+##############################################################
+#################    ACCIONES DE CAMPO    ####################
+##############################################################
+######################################################################################
+## Antes de entrada en el campo "Mantenimiento"
+######################################################################################
+# con este código controlamos que si se accede a la pantalla desde una opción diferente
+# a un modelo de importación, no se pueda modificar el campo
+Subprog AS_YMNTOTYP(VALEUR)
+Variable Integer VALEUR
+# Si estoy en transacción de GMAO propongo valor. Sino lo pongo vacío y no dejo entrar
+If !GIMPORT
+  If (GFLAG = "PO2" or GFLAG = "PO3") and GREP = "C" and VALEUR < 3
+    VALEUR =  4  # Correctivo
+  Elsif VALEUR >= 3
+  Else
+    VALEUR = 1
+    #mkstat = 2
+  Endif
+Endif
+End
+
+######################################################################################
+## Antes de entrada en el campo 'Tipo'
+######################################################################################
+Subprog AS_YTIPOM(VALEUR)
+Variable Integer VALEUR
+
+  If [M:MFG0]YMNTOTYP = 1 or [M:MFG0]YMNTOTYP = 2 Then
+    VALEUR = 1
+    mkstat = 2
+  Else
+    VALEUR = 2
+  Endif
+
+End
+
+######################################################################################
+## Después de modificar el campo 'Tipo'
+######################################################################################
+Subprog AM_YTIPOM(VALEUR)
+Variable Integer VALEUR
+#  [M:MFG0]YTIPOM = VALEUR
+#  Affzo [M:MFG0]YTIPOM
+#Infbox num$(VALEUR)
+#Infbox num$([M:MFG0]YTIPOM)
+End
+
+######################################################################################
+## Después de modificar el campo 'Artículo'
+######################################################################################
+Subprog AM_ITMREF(VALEUR)
+Variable Char    VALEUR()
+
+    Read [F:FCY0]FCY0 = [M:MFG0]MFGFCY
+    If !fstat Then
+      [M:MFG1]BOMALT(nolign-1) = [F:FCY0]YBOMALT
+      Affzo [M:MFG1]BOMALT(nolign-1)
+    Endif
+
+End
+
+##############################################################
+##################    FUNCIONES PROPIAS    ###################
+##############################################################
+Subprog VERIF_GMAO(VOF)
+Value Char VOF
+
+If !clalev([YY3]) : Local File MFGHEAD    [YY3] : Endif
+If !clalev([YY4]) : Local File TABROUALT  [YY4] : Endif
+
+Read [YY3]MFG0 = VOF
+If fstat = 0
+  Read [YY4]TRO0 = [YY3]ROUALT
+    If [YY4]YPREVGMAO = 2 Then
+      [YY3]YMNTOTYP = 3
+      Rewrite [YY3]
+
+      # Si es una OF de preventivo, actualizo la fecha en la Gama
+      If !clalev([YY0]) : Local File WORKSTATIO [YY0] : Endif
+      If !clalev([YY1]) : Local File YGAMAD     [YY1] : Endif
+
+      Read [YY0]WST0 = [YY3]ROUNUM;[YY3]MFGFCY
+      If fstat = 0
+        Read [YY1]YGD1 = [YY0]YGAMA;[YY3]ROUALT
+        If fstat = 0
+           [YY1]FECHAULT = [YY3]STRDAT
+           Rewrite [YY1]
+        Endif
+      Endif
+
+      Close Local File [YY0],[YY1],[YY3],[YY4]
+
+    Endif
+Endif
+End
